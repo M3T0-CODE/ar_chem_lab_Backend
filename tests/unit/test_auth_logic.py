@@ -45,15 +45,15 @@ class TestRegisterLogic:
         self.db = MagicMock()
         self.new_user = _user(is_verified=False)
 
-    @patch("app.routers.auth.get_user", return_value=None)
-    @patch("app.routers.auth.get_user_by_email", return_value=None)
-    @patch("app.routers.auth.create_user")
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.send_otp_email", new_callable=AsyncMock)
+    @patch("app.routes.auth.get_user", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=None)
+    @patch("app.routes.auth.create_user")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.send_otp_email", new_callable=AsyncMock)
     def test_happy_path_returns_message(
         self, mock_email, mock_otp, mock_create, mock_gube, mock_gu
     ):
-        from app.routers.auth import register
+        from app.routes.auth import register
         from app.schemas.user import RegisterModel
         import asyncio
 
@@ -64,9 +64,9 @@ class TestRegisterLogic:
         result = asyncio.get_event_loop().run_until_complete(register(data, self.db))
         assert "Registered" in result["message"]
 
-    @patch("app.routers.auth.get_user", return_value=_user())
+    @patch("app.routes.auth.get_user", return_value=_user())
     def test_duplicate_username_raises_400(self, _):
-        from app.routers.auth import register
+        from app.routes.auth import register
         from app.schemas.user import RegisterModel
         import asyncio
 
@@ -76,10 +76,10 @@ class TestRegisterLogic:
         assert exc.value.status_code == 400
         assert "Username" in exc.value.detail
 
-    @patch("app.routers.auth.get_user", return_value=None)
-    @patch("app.routers.auth.get_user_by_email", return_value=_user())
+    @patch("app.routes.auth.get_user", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=_user())
     def test_duplicate_email_raises_400(self, _gube, _gu):
-        from app.routers.auth import register
+        from app.routes.auth import register
         from app.schemas.user import RegisterModel
         import asyncio
 
@@ -89,15 +89,15 @@ class TestRegisterLogic:
         assert exc.value.status_code == 400
         assert "Email" in exc.value.detail
 
-    @patch("app.routers.auth.get_user", return_value=None)
-    @patch("app.routers.auth.get_user_by_email", return_value=None)
-    @patch("app.routers.auth.create_user")
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.send_otp_email", new_callable=AsyncMock, side_effect=Exception("SMTP down"))
+    @patch("app.routes.auth.get_user", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=None)
+    @patch("app.routes.auth.create_user")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.send_otp_email", new_callable=AsyncMock, side_effect=Exception("SMTP down"))
     def test_email_failure_rolls_back_and_raises_500(
         self, mock_email, mock_otp, mock_create, _gube, _gu
     ):
-        from app.routers.auth import register
+        from app.routes.auth import register
         from app.schemas.user import RegisterModel
         import asyncio
 
@@ -115,9 +115,9 @@ class TestRegisterLogic:
 # ── Verify Email ───────────────────────────────────────────────────────────
 
 class TestVerifyEmailLogic:
-    @patch("app.routers.auth.get_user_by_email", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=None)
     def test_unknown_email_raises_404(self, _):
-        from app.routers.auth import verify_email
+        from app.routes.auth import verify_email
         from app.schemas.user import VerifyEmailModel
 
         data = VerifyEmailModel(email="nobody@x.com", code="1234")
@@ -125,10 +125,10 @@ class TestVerifyEmailLogic:
             verify_email(data, MagicMock())
         assert exc.value.status_code == 404
 
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.get_user_by_email")
     def test_invalid_otp_raises_400(self, mock_gube, mock_otp):
-        from app.routers.auth import verify_email
+        from app.routes.auth import verify_email
         from app.schemas.user import VerifyEmailModel
 
         mock_gube.return_value = _user(is_verified=False)
@@ -139,10 +139,10 @@ class TestVerifyEmailLogic:
             verify_email(data, MagicMock())
         assert exc.value.status_code == 400
 
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.get_user_by_email")
     def test_valid_otp_marks_verified(self, mock_gube, mock_otp):
-        from app.routers.auth import verify_email
+        from app.routes.auth import verify_email
         from app.schemas.user import VerifyEmailModel
 
         user = _user(is_verified=False)
@@ -158,9 +158,9 @@ class TestVerifyEmailLogic:
 # ── Login ──────────────────────────────────────────────────────────────────
 
 class TestLoginLogic:
-    @patch("app.routers.auth.get_user_by_email", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=None)
     def test_unknown_user_raises_401(self, _):
-        from app.routers.auth import login
+        from app.routes.auth import login
         from app.schemas.user import LoginModel
 
         data = LoginModel(email="ghost@x.com", password="pw")
@@ -168,10 +168,10 @@ class TestLoginLogic:
             login(data, MagicMock())
         assert exc.value.status_code == 401
 
-    @patch("app.routers.auth.verify_password", return_value=False)
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.verify_password", return_value=False)
+    @patch("app.routes.auth.get_user_by_email")
     def test_wrong_password_raises_401(self, mock_gube, _):
-        from app.routers.auth import login
+        from app.routes.auth import login
         from app.schemas.user import LoginModel
 
         mock_gube.return_value = _user()
@@ -180,10 +180,10 @@ class TestLoginLogic:
             login(data, MagicMock())
         assert exc.value.status_code == 401
 
-    @patch("app.routers.auth.verify_password", return_value=True)
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.verify_password", return_value=True)
+    @patch("app.routes.auth.get_user_by_email")
     def test_unverified_user_raises_403(self, mock_gube, _):
-        from app.routers.auth import login
+        from app.routes.auth import login
         from app.schemas.user import LoginModel
 
         mock_gube.return_value = _user(is_verified=False)
@@ -193,10 +193,10 @@ class TestLoginLogic:
         assert exc.value.status_code == 403
         assert "verified" in exc.value.detail.lower()
 
-    @patch("app.routers.auth.verify_password", return_value=True)
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.verify_password", return_value=True)
+    @patch("app.routes.auth.get_user_by_email")
     def test_disabled_user_raises_403(self, mock_gube, _):
-        from app.routers.auth import login
+        from app.routes.auth import login
         from app.schemas.user import LoginModel
 
         mock_gube.return_value = _user(disabled=True)
@@ -206,12 +206,12 @@ class TestLoginLogic:
         assert exc.value.status_code == 403
         assert "disabled" in exc.value.detail.lower()
 
-    @patch("app.routers.auth.create_access_token", return_value="access")
-    @patch("app.routers.auth.create_refresh_token", return_value="refresh")
-    @patch("app.routers.auth.verify_password", return_value=True)
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.create_access_token", return_value="access")
+    @patch("app.routes.auth.create_refresh_token", return_value="refresh")
+    @patch("app.routes.auth.verify_password", return_value=True)
+    @patch("app.routes.auth.get_user_by_email")
     def test_valid_login_returns_tokens(self, mock_gube, _vp, _crt, _cat):
-        from app.routers.auth import login
+        from app.routes.auth import login
         from app.schemas.user import LoginModel
 
         mock_gube.return_value = _user()
@@ -225,9 +225,9 @@ class TestLoginLogic:
 # ── Reset Password ─────────────────────────────────────────────────────────
 
 class TestResetPasswordLogic:
-    @patch("app.routers.auth.get_user_by_email", return_value=None)
+    @patch("app.routes.auth.get_user_by_email", return_value=None)
     def test_unknown_user_raises_404(self, _):
-        from app.routers.auth import reset_password
+        from app.routes.auth import reset_password
         from app.schemas.user import ResetPasswordModel
 
         data = ResetPasswordModel(email="nobody@x.com", code="1234", new_password="newpw")
@@ -235,10 +235,10 @@ class TestResetPasswordLogic:
             reset_password(data, MagicMock())
         assert exc.value.status_code == 404
 
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.get_user_by_email")
     def test_invalid_otp_raises_400(self, mock_gube, mock_otp):
-        from app.routers.auth import reset_password
+        from app.routes.auth import reset_password
         from app.schemas.user import ResetPasswordModel
 
         mock_gube.return_value = _user()
@@ -249,11 +249,11 @@ class TestResetPasswordLogic:
             reset_password(data, MagicMock())
         assert exc.value.status_code == 400
 
-    @patch("app.routers.auth.OTPService")
-    @patch("app.routers.auth.update_password")
-    @patch("app.routers.auth.get_user_by_email")
+    @patch("app.routes.auth.OTPService")
+    @patch("app.routes.auth.update_password")
+    @patch("app.routes.auth.get_user_by_email")
     def test_valid_reset_calls_update_password(self, mock_gube, mock_up, mock_otp):
-        from app.routers.auth import reset_password
+        from app.routes.auth import reset_password
         from app.schemas.user import ResetPasswordModel
 
         user = _user()

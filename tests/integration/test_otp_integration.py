@@ -1,9 +1,11 @@
 """
 Integration Tests — OTPService with real SQLite session
 =======================================================
-Uses the `db` fixture (rolls back after each test) and real User model rows.
+Each test gets a fresh User row that is explicitly deleted in teardown.
+This is simpler and more reliable than savepoint tricks.
 """
 import pytest
+import uuid
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -22,29 +24,38 @@ def engine_and_tables():
     Base.metadata.drop_all(eng)
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def session(engine_and_tables):
+    """One session shared across all tests in the module."""
     Session = sessionmaker(bind=engine_and_tables)
     sess = Session()
     yield sess
-    sess.rollback()
     sess.close()
 
 
 @pytest.fixture
 def user(session):
+    """
+    Create a unique user before each test and delete it after.
+    Using uuid avoids UNIQUE constraint collisions between tests.
+    """
     from app.models.user import User
-    from app.core.security import get_password_hash
+    uid = uuid.uuid4().hex[:8]
     u = User(
-        username="integuser",
-        email="integ@example.com",
-        hashed_password=get_password_hash("password123"),
+        username=f"integuser_{uid}",
+        email=f"integ_{uid}@example.com",
+        hashed_password="fakehash_not_needed_for_otp_tests",
         is_verified=False,
     )
     session.add(u)
     session.commit()
     session.refresh(u)
-    return u
+
+    yield u
+
+    # Teardown: clean up this user so nothing leaks
+    session.delete(u)
+    session.commit()
 
 
 # ── Tests ──────────────────────────────────────────────────────────────────
@@ -75,7 +86,6 @@ class TestOtpServiceIntegration:
 
     def test_verify_expired_code(self, session, user):
         OTPService.send_registration_otp(session, user)
-        # Manually expire
         user.otp_expires = datetime.utcnow() - timedelta(seconds=1)
         session.commit()
         assert OTPService.verify(user, user.otp_code) is False
@@ -104,5 +114,4 @@ class TestOtpServiceIntegration:
         second = OTPService.send_registration_otp(session, user)
         session.refresh(user)
         assert user.otp_code == second
-        # First code should now be wrong
-        assert OTPService.verify(user, first) == (first == second)  # only equal if same by chance
+        assert OTPService.verify(user, first) == (first == second)

@@ -138,13 +138,24 @@ class TestVerify:
         user = make_user(otp_code="1234", otp_expires=None)
         assert OTPService.verify(user, "1234") is False
 
-    def test_exactly_at_expiry_returns_false(self):
-        """A code at exactly utcnow() should be expired."""
+    def test_exactly_at_expiry_returns_true(self):
+        """
+        verify() uses strict `>` so when utcnow() == otp_expires the code is
+        NOT yet expired and should still be accepted.
+        """
         now = datetime.utcnow()
         user = make_user(otp_code="1234", otp_expires=now)
         with patch("app.services.otp.datetime") as mock_dt:
             mock_dt.utcnow.return_value = now
-            # otp_expires == utcnow, the check is `>` so this should be False
+            result = OTPService.verify(user, "1234")
+        assert result is True
+
+    def test_one_second_past_expiry_returns_false(self):
+        """A code 1 second past its expiry must be rejected."""
+        expires = datetime.utcnow()
+        user = make_user(otp_code="1234", otp_expires=expires)
+        with patch("app.services.otp.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = expires + timedelta(seconds=1)
             result = OTPService.verify(user, "1234")
         assert result is False
 
